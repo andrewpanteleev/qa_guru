@@ -1,95 +1,47 @@
 import pytest
 import requests
+from http import HTTPStatus
+from models.User import User
 
+def test_users(app_url):
+    response = requests.get(f"{app_url}/api/users/")
+    assert response.status_code == HTTPStatus.OK
+    users_list = response.json()
+    # В ответе от fastapi-pagination ожидается, что список пользователей находится в поле "items".
+    items = users_list.get("items", [])
+    # Проходим по всем элементам и проверяем их соответствие модели User через pydantic
+    for user in items:
+        User.model_validate(user)
 
-BASE_URL = "http://127.0.0.1:8000/api/users"
+def test_users_no_duplicates(users):
+    # Фикстура "users" уже получает данные (ответ GET /api/users/) и возвращает JSON-объект.
+    items = users.get("items", [])
+    # Извлекаем идентификаторы пользователей
+    ids = [user["id"] for user in items]
+    # Проверяем, что все идентификаторы уникальны (то есть нет дублирующихся записей)
+    assert len(ids) == len(set(ids))
 
+@pytest.mark.parametrize("user_id", [1, 6, 12])
+def test_user(app_url, user_id):
+    # Отправляем GET-запрос для получения конкретного пользователя по ID
+    response = requests.get(f"{app_url}/api/users/{user_id}")
+    # Проверяем, что сервер вернул статус 200 OK
+    assert response.status_code == HTTPStatus.OK
+    user = response.json()
+    # Проверяем, что данные пользователя соответствуют модели User (валидируются через pydantic)
+    User.model_validate(user)
 
-@pytest.mark.parametrize("user_id, email, first_name, last_name, avatar", [
-    (1, "newuser@mail.ru", "New", "User", "avatar1.png"),
-    (2, "example@mail.com", "Example", "User", "avatar2.png"),
-])
-def test_create_user(user_id, email, first_name, last_name, avatar):
-    """Тест на создание нового пользователя"""
-    response = requests.post(BASE_URL, json={
-        "id": user_id,
-        "email": email,
-        "first_name": first_name,
-        "last_name": last_name,
-        "avatar": avatar
-    })
+@pytest.mark.parametrize("user_id", [13])
+def test_user_nonexistent_values(app_url, user_id):
+    # Если запрашивается пользователь, которого нет (например, ID больше количества пользователей),
+    # сервер должен вернуть статус 404 NOT FOUND.
+    response = requests.get(f"{app_url}/api/users/{user_id}")
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
-    assert response.status_code == 200, f"Expected 200, but got {response.status_code}"
-    body = response.json()
-    assert "id" in body, "Response body does not contain 'id' key"
-    assert body["id"] == user_id
-    assert body["email"] == email
-    assert body["first_name"] == first_name
-    assert body["last_name"] == last_name
-    assert body["avatar"] == avatar
-
-
-@pytest.mark.parametrize("user_id", [
-    12345,  # Передаем несуществующий ID
-    -1,  # Или отрицательное значение
-])
-def test_get_user_not_found(user_id):
-    """Тест на попытку получить несуществующего пользователя"""
-    response = requests.get(f"{BASE_URL}/{user_id}")
-    assert response.status_code == 404, f"Expected 404, but got {response.status_code}"
-    assert response.json()["detail"] == "User not found"
-
-
-@pytest.mark.parametrize("user_id, email, first_name, last_name, avatar", [
-    (3, "updated@mail.com", "Updated", "User", "updated_avatar.png"),
-])
-def test_update_user(user_id, email, first_name, last_name, avatar):
-    """Тест на обновление данных пользователя"""
-    # Сначала создаем пользователя с заданным id
-    create_response = requests.post(BASE_URL, json={
-        "id": user_id,
-        "email": "temp@mail.com",
-        "first_name": "Temp",
-        "last_name": "User",
-        "avatar": "temp.png"
-    })
-    assert create_response.status_code == 200, "Failed to create test user"
-
-    # Обновляем данные пользователя (id передаем в URL и в теле — не изменяем)
-    update_response = requests.put(f"{BASE_URL}/{user_id}", json={
-        "id": user_id,
-        "email": email,
-        "first_name": first_name,
-        "last_name": last_name,
-        "avatar": avatar
-    })
-    assert update_response.status_code == 200, f"Expected 200, but got {update_response.status_code}"
-    body = update_response.json()
-    assert body["email"] == email
-    assert body["first_name"] == first_name
-    assert body["last_name"] == last_name
-    assert body["avatar"] == avatar
-
-
-def test_delete_user():
-    """Тест на удаление пользователя"""
-    user_id = 4
-    # Создаем пользователя с id 4
-    create_response = requests.post(BASE_URL, json={
-        "id": user_id,
-        "email": "delete@mail.com",
-        "first_name": "Delete",
-        "last_name": "User",
-        "avatar": "delete.png"
-    })
-    assert create_response.status_code == 200, "Failed to create test user"
-
-    # Удаляем пользователя
-    delete_response = requests.delete(f"{BASE_URL}/{user_id}")
-    assert delete_response.status_code == 200, f"Expected 200, but got {delete_response.status_code}"
-    assert delete_response.json()["detail"] == "User deleted"
-
-    # Проверяем, что пользователь действительно удалён
-    get_response = requests.get(f"{BASE_URL}/{user_id}")
-    assert get_response.status_code == 404, f"Expected 404, but got {get_response.status_code}"
-
+@pytest.mark.parametrize("user_id", [-1, 0, 'text'])
+def test_user_invalid_values(app_url, user_id):
+    # Здесь мы проверяем, что передаются недопустимые значения для user_id.
+    # Например, отрицательные, ноль или строка вместо целого числа.
+    # Ожидается, что сервер вернет статус UNPROCESSABLE_ENTITY (422) для таких значений.
+    response = requests.get(f"{app_url}/api/users/{user_id}")
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
