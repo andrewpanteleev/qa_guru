@@ -11,7 +11,6 @@ def total_users(app_url):
     response = requests.get(f"{app_url}/api/users/")
     assert response.status_code == HTTPStatus.OK
     data = response.json()
-    # Предполагается, что fastapi-pagination возвращает total, items, page, size, pages
     return data.get("total", len(data.get("items", [])))
 
 def test_pagination_object_count(app_url):
@@ -43,13 +42,20 @@ def test_pagination_total_pages(app_url, size):
 @pytest.mark.parametrize("page, size", [(1, 4), (2, 4)])
 def test_pagination_different_pages(app_url, page, size):
     """
-    Проверяем, что данные, полученные для разных страниц, различаются.
+    Проверяем, что для разных страниц возвращаются отличающиеся наборы пользователей.
+    Если наборы идентификаторов (как множества) совпадают, значит страницы содержат одни и те же данные,
+    даже если порядок различается – это считается дефектом.
     """
-    response_page = requests.get(f"{app_url}/api/users/", params={"page": page, "size": size})
-    response_next_page = requests.get(f"{app_url}/api/users/", params={"page": page + 1, "size": size})
-    assert response_page.status_code == HTTPStatus.OK
-    assert response_next_page.status_code == HTTPStatus.OK
-    items_page = response_page.json().get("items", [])
-    items_next_page = response_next_page.json().get("items", [])
-    # Если данных достаточно, наборы должны отличаться.
-    assert items_page != items_next_page, "Data on consecutive pages should differ"
+    response_page1 = requests.get(f"{app_url}/api/users/", params={"page": page, "size": size})
+    response_page2 = requests.get(f"{app_url}/api/users/", params={"page": page + 1, "size": size})
+    assert response_page1.status_code == HTTPStatus.OK
+    assert response_page2.status_code == HTTPStatus.OK
+    items_page1 = response_page1.json().get("items", [])
+    items_page2 = response_page2.json().get("items", [])
+
+    # Извлекаем множества идентификаторов пользователей для каждой страницы
+    set_page1 = {item["id"] for item in items_page1}
+    set_page2 = {item["id"] for item in items_page2}
+
+    # Если множества совпадают, это означает, что страницы содержат идентичные данные (даже если порядок разный)
+    assert set_page1 != set_page2, "Pages contain identical items (even if sorted differently)"
