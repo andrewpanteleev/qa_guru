@@ -8,6 +8,6 @@ from app.models.AppStatus import AppStatus
 router = APIRouter()
 
 
-@router.get("/status", status_code=HTTPStatus.OK)
+@router.get("/status", response_model=AppStatus)
 def status() -> AppStatus:
     return AppStatus(database=check_availability())

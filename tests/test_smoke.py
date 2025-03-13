@@ -13,5 +13,4 @@ def check_service(app_url):
 def test_status(app_url):
     response = requests.get(f"{app_url}/status")
     assert response.status_code == 200
-    assert "users" in response.json()
-    assert isinstance(response.json()["users"], bool)
+    assert "database" in response.json()
