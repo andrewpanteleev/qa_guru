@@ -20,6 +20,5 @@
         - run: pip install --upgrade -r -requirements.txt
         - run: docker compose up -d --build
         - run: pytest tests
-
         - run: docker compose logs app
           if: always()
