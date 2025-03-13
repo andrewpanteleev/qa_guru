@@ -11,6 +11,7 @@
       env:
         POSTGRES_USER: ci
         POSTGRES_PASSWORD: ci
+        APP_URL: http://127.0.0.1:8002
       steps:
         - uses: actions/checkout@v4
         - uses: actions/setup-python@v5
