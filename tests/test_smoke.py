@@ -1,14 +1,17 @@
-import os
-import socket
+import pytest
 import requests
-from http import HTTPStatus
+
+
+def check_service(app_url):
+    try:
+        response = requests.get(f"{app_url}/status")
+        response.raise_for_status()
+    except requests.RequestException:
+        pytest.exit("Сервис недоступен. Тесты не будут выполнены.")
 
 
 def test_status(app_url):
     response = requests.get(f"{app_url}/status")
-    assert response.status_code == HTTPStatus.OK
-
-def test_server_responds_on_port(port):
-    local_host = os.getenv("HOST")
-    with socket.create_connection((local_host, port), timeout=3):
-        assert True, f"Server should be responding on port {port}."
+    assert response.status_code == 200
+    assert "users" in response.json()
+    assert isinstance(response.json()["users"], bool)
