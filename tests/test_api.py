@@ -7,6 +7,7 @@ from faker import Faker
 
 from app.models.User import ListUserPaginationModel
 from app.models.User import User
+from app.models.reqres import Reqres
 
 fake = Faker()
 
@@ -19,21 +20,21 @@ user_payload = {
 
 
 @pytest.fixture(scope="function")
-def create_user(app_url):
-    response_post = requests.post(f"{app_url}/api/users", json=user_payload)
+def create_user(env):
+    response_post = Reqres(env).create_user(user_payload)
     user = User.model_validate(response_post.json())
     return user.id
 
 
 @pytest.fixture
-def users(app_url):
-    response = requests.get(f"{app_url}/api/users")
+def users(env):
+    response = Reqres(env).get_users()
     assert response.status_code == HTTPStatus.OK
     return ListUserPaginationModel.model_validate(response.json())
 
 
-def test_users(app_url) -> None:
-    response = requests.get(f"{app_url}/api/users")
+def test_users(env) -> None:
+    response = Reqres(env).get_users()
     assert response.status_code == HTTPStatus.OK
     users_data = ListUserPaginationModel.model_validate(response.json())
 
@@ -48,8 +49,8 @@ def test_users_no_duplicates(users) -> None:
 class TestPagination:
 
     @pytest.mark.parametrize("size", [2, 4, 7])
-    def test_pagination_size(self, app_url, size: int) -> None:
-        response = requests.get(f"{app_url}/api/users?size={size}")
+    def test_pagination_size(self, env, size: int) -> None:
+        response = Reqres(env).get_users(size=size)
         assert response.status_code == HTTPStatus.OK
 
         data = ListUserPaginationModel.model_validate(response.json())
@@ -57,8 +58,8 @@ class TestPagination:
 
 
     @pytest.mark.parametrize("size", [1, 2, 3])
-    def test_pagination_total_pages(self, app_url, users: ListUserPaginationModel, size: int) -> None:
-        response = requests.get(f"{app_url}/api/users?size={size}")
+    def test_pagination_total_pages(self, env, users: ListUserPaginationModel, size: int) -> None:
+        response = Reqres(env).get_users(size=size)
         assert response.status_code == HTTPStatus.OK
 
         data = ListUserPaginationModel.model_validate(response.json())
@@ -68,10 +69,10 @@ class TestPagination:
 
     @pytest.mark.parametrize("page_one, page_two", [(1, 2)])
     @pytest.mark.parametrize("size", [5])
-    def test_pagination_different_pages(self, app_url: str, page_one: int, page_two: int, size: int) -> None:
+    def test_pagination_different_pages(self, env: str, page_one: int, page_two: int, size: int) -> None:
 
-        response_page_1 = requests.get(f"{app_url}/api/users?page={page_one}&size={size}")
-        response_page_2 = requests.get(f"{app_url}/api/users?page={page_two}&size={size}")
+        response_page_1 = Reqres(env).get_users(page=page_one, size=size)
+        response_page_2 = Reqres(env).get_users(page=page_two, size=size)
 
         assert response_page_1.status_code == HTTPStatus.OK
         assert response_page_2.status_code == HTTPStatus.OK
@@ -91,8 +92,8 @@ class TestPagination:
 
 
     @pytest.mark.parametrize("page, size", [(1, 2), (1, 5), (2, 3)])
-    def test_pagination_correct_pages(self, app_url: str, page: int, size: int) -> None:
-        response = requests.get(f"{app_url}/api/users?page={page}&size={size}")
+    def test_pagination_correct_pages(self, env: str, page: int, size: int) -> None:
+        response = Reqres(env).get_users(page=page, size=size)
         assert response.status_code == HTTPStatus.OK
 
         data = ListUserPaginationModel.model_validate(response.json())
@@ -101,8 +102,8 @@ class TestPagination:
 
 
     @pytest.mark.parametrize("size", [3, 5, 10])
-    def test_pagination_response_fields(self, app_url: str, size: int) -> None:
-        response = requests.get(f"{app_url}/api/users?size={size}")
+    def test_pagination_response_fields(self, env: str, size: int) -> None:
+        response = Reqres(env).get_users(size=size)
         assert response.status_code == HTTPStatus.OK
 
         data = ListUserPaginationModel.model_validate(response.json())
@@ -117,37 +118,37 @@ class TestPagination:
 Валидность тестовых данных (email, url)
 Отправить модель без поля на создание"""
 class TestCreationUser:
-    def test_successful_creation(self, app_url):
-        response_post = requests.post(f"{app_url}/api/users", json=user_payload)
+    def test_successful_creation(self, env):
+        response_post = Reqres(env).create_user(user_payload)
         assert response_post.status_code == HTTPStatus.CREATED
         user = User.model_validate(response_post.json())
-        response_get = requests.get(f"{app_url}/api/users/{user.id}")
+        response_get = Reqres(env).get_user(user.id)
         assert response_get.status_code == HTTPStatus.OK
         get_user = User.model_validate(response_get.json())
         assert user.id == get_user.id
 
-    def test_invalid_email(self, app_url):
+    def test_invalid_email(self, env):
         copy_data = copy.deepcopy(user_payload)
         copy_data["email"] = "email"
-        response_post = requests.post(f"{app_url}/api/users", json=copy_data)
+        response_post = Reqres(env).create_user(copy_data)
         assert response_post.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_invalid_avatar(self, app_url):
+    def test_invalid_avatar(self, env):
         copy_data = copy.deepcopy(user_payload)
         copy_data["avatar"] = "avatar"
-        response_post = requests.post(f"{app_url}/api/users", json=copy_data)
+        response_post = Reqres(env).create_user(copy_data)
         assert response_post.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_invalid_first_name(self, app_url):
+    def test_invalid_first_name(self, env):
         copy_data = copy.deepcopy(user_payload)
         copy_data["first_name"] = 12345
-        response_post = requests.post(f"{app_url}/api/users", json=copy_data)
+        response_post = Reqres(env).create_user(copy_data)
         assert response_post.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_without_last_name(self, app_url):
+    def test_without_last_name(self, env):
         copy_data = copy.deepcopy(user_payload)
         copy_data.pop("last_name")
-        response_post = requests.post(f"{app_url}/api/users", json=copy_data)
+        response_post = Reqres(env).create_user(copy_data)
         assert response_post.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
@@ -155,78 +156,78 @@ class TestCreationUser:
 404 422 ошибки на delete
 404 на удаленного пользователя"""
 class TestDeletionUser:
-    def test_successful_removal(self, app_url, create_user):
-        response_delete = requests.delete(f"{app_url}/api/users/{create_user}")
+    def test_successful_removal(self, env, create_user):
+        response_delete = Reqres(env).delete_user(create_user)
         assert response_delete.status_code == HTTPStatus.OK
-        response_get = requests.get(f"{app_url}/api/users/{create_user}")
+        response_get = Reqres(env).get_user(create_user)
         assert response_get.status_code == HTTPStatus.NOT_FOUND
 
     @pytest.mark.parametrize("user_id", [-1, 0, "fafaf"])
-    def test_invalid_user_id(self, app_url, user_id):
-        response_delete = requests.delete(f"{app_url}/api/users/{user_id}")
+    def test_invalid_user_id(self, env, user_id):
+        response_delete = Reqres(env).delete_user(user_id)
         assert response_delete.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_double_removal(self, app_url, create_user):
-        response_delete = requests.delete(f"{app_url}/api/users/{create_user}")
+    def test_double_removal(self, env, create_user):
+        response_delete = Reqres(env).delete_user(create_user)
         assert response_delete.status_code == HTTPStatus.OK
-        response_delete_2 = requests.delete(f"{app_url}/api/users/{create_user}")
+        response_delete_2 = Reqres(env).delete_user(create_user)
         assert response_delete_2.status_code == HTTPStatus.NOT_FOUND
 
-    def test_get_deleted_user(self, app_url, create_user):
-        response_delete = requests.delete(f"{app_url}/api/users/{create_user}")
+    def test_get_deleted_user(self, env, create_user):
+        response_delete = Reqres(env).delete_user(create_user)
         assert response_delete.status_code == HTTPStatus.OK
 
-        response_get = requests.get(f"{app_url}/api/users/{create_user}")
+        response_get = Reqres(env).get_user(create_user)
         assert response_get.status_code == HTTPStatus.NOT_FOUND
 
 
 """Тест на patch: изменение. Предусловия: созданный пользователь
 404 422 ошибки на patch"""
 class TestUpdatedUser:
-    def test_successful_update(self, app_url, create_user):
+    def test_successful_update(self, env, create_user):
         updated_first_name = {
             "first_name": "Hulio"
         }
-        response_patch = requests.patch(f"{app_url}/api/users/{create_user}", json=updated_first_name)
+        response_patch = Reqres(env).update_user(create_user, updated_first_name)
         assert response_patch.status_code == HTTPStatus.OK
         user = User.model_validate(response_patch.json())
-        response_get = requests.get(f"{app_url}/api/users/{user.id}")
+        response_get = Reqres(env).get_user(user.id)
         user_get = User.model_validate(response_get.json())
         assert user_get.first_name == "Hulio"
 
-    def test_invalid_email(self, app_url, create_user):
+    def test_invalid_email(self, env, create_user):
         updated_email = {
             "email": "email"
         }
-        response_patch = requests.patch(f"{app_url}/api/users/{create_user}", json=updated_email)
+        response_patch = Reqres(env).update_user(create_user, updated_email)
         assert response_patch.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_invalid_avatar(self, app_url, create_user):
+    def test_invalid_avatar(self, env, create_user):
         updated_avatar = {
             "avatar": "avatar"
         }
-        response_patch = requests.patch(f"{app_url}/api/users/{create_user}", json=updated_avatar)
+        response_patch = Reqres(env).update_user(create_user, updated_avatar)
         assert response_patch.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
     @pytest.mark.parametrize("user_id", [-1, 0, "fafaf"])
-    def test_invalid_user_id(self, app_url, user_id):
-        response_patch = requests.patch(f"{app_url}/api/users/{user_id}")
+    def test_invalid_user_id(self, env, user_id):
+        response_patch = Reqres(env).update_user(user_id)
         assert response_patch.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 """Get после создания, изменения"""
 class TestGetUser:
-    def test_get_after_creation(self, app_url, create_user):
-        response_get = requests.get(f"{app_url}/api/users/{create_user}")
+    def test_get_after_creation(self, env, create_user):
+        response_get = Reqres(env).get_user(create_user)
         assert response_get.status_code == HTTPStatus.OK
         user = User.model_validate(response_get.json())
         assert user.id == create_user
 
-    def test_get_after_update(self, app_url, create_user):
+    def test_get_after_update(self, env, create_user):
         updated_data = {"first_name": "UpdatedName"}
-        response_patch = requests.patch(f"{app_url}/api/users/{create_user}", json=updated_data)
+        response_patch = Reqres(env).update_user(create_user, updated_data)
         assert response_patch.status_code == HTTPStatus.OK
 
-        response_get = requests.get(f"{app_url}/api/users/{create_user}")
+        response_get = Reqres(env).get_user(create_user)
         assert response_get.status_code == HTTPStatus.OK
         user = User.model_validate(response_get.json())
         assert user.first_name == "UpdatedName"
@@ -234,39 +235,39 @@ class TestGetUser:
 """Тест на 405 ошибку (метод не поддерживается)"""
 class TestMethodNotAllowed:
     @pytest.mark.parametrize("method", ["put", "delete", "patch"])
-    def test_method_not_allowed(self, app_url, method):
-        request_func = getattr(requests, method)
-        response = request_func(f"{app_url}/api/users")
+    def test_method_not_allowed(self, env, method):
+        request_func = getattr(Reqres(env), method)
+        response = request_func("/api/users")
         assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
 
 
 """Полный жизненный цикл пользователя: создание → чтение → обновление → удаление"""
 class TestUserFlow:
-    def test_user_lifecycle(self, app_url):
+    def test_user_lifecycle(self, env):
         # Создание пользователя
-        response_post = requests.post(f"{app_url}/api/users", json=user_payload)
+        response_post = Reqres(env).create_user(user_payload)
         assert response_post.status_code == HTTPStatus.CREATED
         user = User.model_validate(response_post.json())
 
         # Чтение пользователя
-        response_get = requests.get(f"{app_url}/api/users/{user.id}")
+        response_get = Reqres(env).get_user(user.id)
         assert response_get.status_code == HTTPStatus.OK
 
         # Обновление пользователя
         updated_data = {"first_name": "UpdatedName"}
-        response_patch = requests.patch(f"{app_url}/api/users/{user.id}", json=updated_data)
+        response_patch = Reqres(env).update_user(user.id, updated_data)
         assert response_patch.status_code == HTTPStatus.OK
 
         # Проверка обновления
-        response_get_updated = requests.get(f"{app_url}/api/users/{user.id}")
+        response_get_updated = Reqres(env).get_user(user.id)
         assert response_get_updated.status_code == HTTPStatus.OK
         updated_user = User.model_validate(response_get_updated.json())
         assert updated_user.first_name == "UpdatedName"
 
         # Удаление пользователя
-        response_delete = requests.delete(f"{app_url}/api/users/{user.id}")
+        response_delete = Reqres(env).delete_user(user.id)
         assert response_delete.status_code == HTTPStatus.OK
 
         # Проверка удаления
-        response_get_deleted = requests.get(f"{app_url}/api/users/{user.id}")
+        response_get_deleted = Reqres(env).get_user(user.id)
         assert response_get_deleted.status_code == HTTPStatus.NOT_FOUND
